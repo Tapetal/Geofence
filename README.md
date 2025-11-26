@@ -51,7 +51,7 @@ This service processes GPS location events from vehicles in real-time and:
 
 1. **Extract the zip file and navigate to the project directory**
    ```bash
-   cd geofence-service
+   cd Geofence
    ```
 
 2. **Install dependencies**

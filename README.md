@@ -12,10 +12,6 @@ A real-time location-based service that tracks vehicles as they move through geo
 - [Testing](#testing)
 - [Design Decisions](#design-decisions)
 - [Future Improvements](#future-improvements)
-- [Assumptions](#assumptions)
-- [Contributing](#contributing)
-- [License](#license)
-
 
 ## 🎯 Overview
 
@@ -53,27 +49,17 @@ This service processes GPS location events from vehicles in real-time and:
 
 ### Installation
 
-1. **Create project directory and navigate to it**
+1. **Extract the zip file and navigate to the project directory**
    ```bash
-   mkdir geofence-service
    cd geofence-service
    ```
 
-2. **Initialize project and install dependencies**
+2. **Install dependencies**
    ```bash
-   npm init -y
-   npm install express @turf/turf cors
-   npm install -D typescript @types/node @types/express @types/cors @types/geojson ts-node nodemon
+   npm install
    ```
 
-3. **Copy all the files from the artifacts** into their respective locations:
-   - `package.json` (root)
-   - `tsconfig.json` (root)
-   - `.gitignore` (root)
-   - `nodemon.json` (root)
-   - Create `src/` folder and add all TypeScript files
-
-4. **Run the service**
+3. **Run the service**
 
    **Development mode (with auto-reload):**
    ```bash
@@ -86,21 +72,52 @@ This service processes GPS location events from vehicles in real-time and:
    npm start
    ```
 
-5. **Verify it's running**
+4. **Verify it's running**
    ```bash
    curl http://localhost:3000/health
+   ```
+
+   You should see:
+   ```json
+   {
+     "status": "OK",
+     "timestamp": "2025-11-26T10:00:00.000Z",
+     "uptime": 1.234
+   }
    ```
 
 ## 📡 API Documentation
 
 ### Base URL
 ```
-http://localhost:3000/api
+http://localhost:3000
 ```
 
 ### Endpoints
 
-#### 1. Submit Location Update
+#### 1. Health Check
+Check if the service is running.
+
+**Request:**
+```http
+GET /health
+```
+
+**Response (200 OK):**
+```json
+{
+  "status": "OK",
+  "timestamp": "2025-11-26T10:00:00.000Z",
+  "uptime": 123.45
+}
+```
+
+---
+
+#### 2. Submit Location Update
+Send GPS coordinates from a vehicle. The service will detect zone transitions and return any events generated.
+
+**Request:**
 ```http
 POST /api/location
 Content-Type: application/json
@@ -112,7 +129,7 @@ Content-Type: application/json
 }
 ```
 
-**Response (200 OK):**
+**Response - Vehicle Enters Zone (200 OK):**
 ```json
 {
   "message": "Location updated successfully",
@@ -137,7 +154,41 @@ Content-Type: application/json
 }
 ```
 
-#### 2. Get Vehicle Status
+**Response - No Zone Change (200 OK):**
+```json
+{
+  "message": "Location updated successfully",
+  "vehicleId": "TX123",
+  "currentZone": "Outside all zones",
+  "location": {
+    "latitude": 9.0500,
+    "longitude": 7.4000
+  }
+}
+```
+
+**Error Response - Invalid Coordinates (400 Bad Request):**
+```json
+{
+  "error": "Invalid latitude",
+  "message": "Latitude must be between -90 and 90"
+}
+```
+
+**Error Response - Missing Fields (400 Bad Request):**
+```json
+{
+  "error": "Missing required fields",
+  "required": ["vehicleId", "latitude", "longitude"]
+}
+```
+
+---
+
+#### 3. Get Vehicle Status
+Query the current zone and location of a specific vehicle.
+
+**Request:**
 ```http
 GET /api/vehicle/:vehicleId/status
 ```
@@ -160,19 +211,47 @@ curl http://localhost:3000/api/vehicle/TX123/status
 }
 ```
 
-#### 3. Get Events
+**Response - Vehicle Not Found (404 Not Found):**
+```json
+{
+  "error": "Vehicle not found",
+  "message": "No tracking data found for vehicle TX999"
+}
+```
+
+---
+
+#### 4. Get Events
+Retrieve zone crossing events with optional filtering.
+
+**Request:**
 ```http
 GET /api/events?vehicleId=TX123&limit=10
 ```
 
 **Query Parameters:**
-- `vehicleId` (optional): Filter events by vehicle
-- `limit` (optional): Limit number of recent events
+- `vehicleId` (optional): Filter events by specific vehicle
+- `limit` (optional): Limit number of recent events returned
+
+**Example - All Events:**
+```bash
+curl http://localhost:3000/api/events
+```
+
+**Example - Events for Specific Vehicle:**
+```bash
+curl http://localhost:3000/api/events?vehicleId=TX123
+```
+
+**Example - Last 5 Events:**
+```bash
+curl http://localhost:3000/api/events?limit=5
+```
 
 **Response (200 OK):**
 ```json
 {
-  "count": 2,
+  "count": 4,
   "events": [
     {
       "vehicleId": "TX123",
@@ -183,14 +262,44 @@ GET /api/events?vehicleId=TX123&limit=10
         "latitude": 9.0765,
         "longitude": 7.4165
       }
+    },
+    {
+      "vehicleId": "TX123",
+      "zoneName": "Wuse",
+      "eventType": "EXIT",
+      "timestamp": "2025-11-26T10:45:00.000Z",
+      "location": {
+        "latitude": 9.1103,
+        "longitude": 7.4041
+      }
+    },
+    {
+      "vehicleId": "TX123",
+      "zoneName": "Gwarimpa",
+      "eventType": "ENTER",
+      "timestamp": "2025-11-26T10:45:00.000Z",
+      "location": {
+        "latitude": 9.1103,
+        "longitude": 7.4041
+      }
     }
   ]
 }
 ```
 
-#### 4. Get All Vehicles
+---
+
+#### 5. Get All Vehicles
+List all currently tracked vehicles and their status.
+
+**Request:**
 ```http
 GET /api/vehicles
+```
+
+**Example:**
+```bash
+curl http://localhost:3000/api/vehicles
 ```
 
 **Response (200 OK):**
@@ -206,14 +315,42 @@ GET /api/vehicles
         "longitude": 7.4165
       },
       "lastUpdate": "2025-11-26T10:30:00.000Z"
+    },
+    {
+      "vehicleId": "TX456",
+      "currentZone": "Gwarimpa",
+      "location": {
+        "latitude": 9.1103,
+        "longitude": 7.4041
+      },
+      "lastUpdate": "2025-11-26T10:35:00.000Z"
+    },
+    {
+      "vehicleId": "TX789",
+      "currentZone": "Outside all zones",
+      "location": {
+        "latitude": 9.2000,
+        "longitude": 7.3000
+      },
+      "lastUpdate": "2025-11-26T10:40:00.000Z"
     }
   ]
 }
 ```
 
-#### 5. Get Zones
+---
+
+#### 6. Get Zones
+List all defined geofence zones.
+
+**Request:**
 ```http
 GET /api/zones
+```
+
+**Example:**
+```bash
+curl http://localhost:3000/api/zones
 ```
 
 **Response (200 OK):**
@@ -229,14 +366,51 @@ GET /api/zones
         "longitude": 7.4165
       },
       "radius": 2000
+    },
+    {
+      "id": "gwarimpa",
+      "name": "Gwarimpa",
+      "coordinates": {
+        "latitude": 9.1103,
+        "longitude": 7.4041
+      },
+      "radius": 2500
+    },
+    {
+      "id": "apo",
+      "name": "Apo",
+      "coordinates": {
+        "latitude": 8.9806,
+        "longitude": 7.4467
+      },
+      "radius": 2000
+    },
+    {
+      "id": "garki",
+      "name": "Garki",
+      "coordinates": {
+        "latitude": 9.0354,
+        "longitude": 7.4906
+      },
+      "radius": 1800
     }
   ]
 }
 ```
 
-#### 6. Get Statistics
+---
+
+#### 7. Get Statistics
+Get system-wide statistics about events and vehicles.
+
+**Request:**
 ```http
 GET /api/stats
+```
+
+**Example:**
+```bash
+curl http://localhost:3000/api/stats
 ```
 
 **Response (200 OK):**
@@ -245,57 +419,133 @@ GET /api/stats
   "totalEvents": 45,
   "enterEvents": 23,
   "exitEvents": 22,
-  "uniqueVehicles": 5,
+  "uniqueVehicles": 8,
   "activeVehicles": 5
 }
 ```
 
 ## 🧪 Testing
 
-### Manual Testing with curl
+### Complete Test Flow
 
-**Test Scenario: Vehicle entering Wuse zone**
+Follow this sequence to test the complete geofencing functionality:
 
 ```bash
-# 1. Check health
+# 1. Check service health
 curl http://localhost:3000/health
 
-# 2. Send location outside all zones
+# 2. View available zones
+curl http://localhost:3000/api/zones
+
+# 3. Send location OUTSIDE all zones
 curl -X POST http://localhost:3000/api/location \
   -H "Content-Type: application/json" \
   -d '{"vehicleId":"TX123","latitude":9.0500,"longitude":7.4000}'
 
-# 3. Send location inside Wuse zone (should generate ENTER event)
+# Expected: No events, vehicle outside all zones
+
+# 4. Send location INSIDE Wuse zone (ENTER event)
 curl -X POST http://localhost:3000/api/location \
   -H "Content-Type: application/json" \
   -d '{"vehicleId":"TX123","latitude":9.0765,"longitude":7.4165}'
 
-# 4. Check vehicle status
+# Expected: ENTER event for Wuse zone
+
+# 5. Check vehicle status
 curl http://localhost:3000/api/vehicle/TX123/status
 
-# 5. Move to Gwarimpa (should generate EXIT and ENTER events)
+# Expected: currentZone = "Wuse"
+
+# 6. Move to Gwarimpa zone (EXIT Wuse + ENTER Gwarimpa)
 curl -X POST http://localhost:3000/api/location \
   -H "Content-Type: application/json" \
   -d '{"vehicleId":"TX123","latitude":9.1103,"longitude":7.4041}'
 
-# 6. View all events
+# Expected: EXIT event for Wuse, ENTER event for Gwarimpa
+
+# 7. Add another vehicle in Apo zone
+curl -X POST http://localhost:3000/api/location \
+  -H "Content-Type: application/json" \
+  -d '{"vehicleId":"TX456","latitude":8.9806,"longitude":7.4467}'
+
+# Expected: ENTER event for Apo zone
+
+# 8. View all events
 curl http://localhost:3000/api/events
 
-# 7. View events for specific vehicle
+# Expected: All zone crossing events
+
+# 9. View events for TX123 only
 curl http://localhost:3000/api/events?vehicleId=TX123
 
-# 8. View all tracked vehicles
+# Expected: Only TX123's events
+
+# 10. View all tracked vehicles
 curl http://localhost:3000/api/vehicles
 
-# 9. View system stats
+# Expected: TX123 (in Gwarimpa), TX456 (in Apo)
+
+# 11. Get system statistics
 curl http://localhost:3000/api/stats
+
+# Expected: Event counts and vehicle counts
+
+# 12. Move TX123 outside all zones (EXIT event)
+curl -X POST http://localhost:3000/api/location \
+  -H "Content-Type: application/json" \
+  -d '{"vehicleId":"TX123","latitude":9.2000,"longitude":7.3000}'
+
+# Expected: EXIT event for Gwarimpa
+
+# 13. Test invalid coordinates (validation error)
+curl -X POST http://localhost:3000/api/location \
+  -H "Content-Type: application/json" \
+  -d '{"vehicleId":"TX999","latitude":999,"longitude":7.4000}'
+
+# Expected: 400 error - Invalid latitude
+
+# 14. Test missing fields (validation error)
+curl -X POST http://localhost:3000/api/location \
+  -H "Content-Type: application/json" \
+  -d '{"vehicleId":"TX999"}'
+
+# Expected: 400 error - Missing required fields
+```
+
+### Using the Test Script
+
+A bash script (`test-api.sh`) is included that runs all the above tests automatically:
+
+```bash
+# Make it executable
+chmod +x test-api.sh
+
+# Run all tests
+./test-api.sh
 ```
 
 ### Testing with Postman
 
-1. Import the following as a collection or test individually
-2. Use `http://localhost:3000` as base URL
-3. Test the complete flow from location updates to event retrieval
+1. Open Postman and create a new collection called "Geofence API"
+2. Set the base URL variable: `http://localhost:3000`
+3. Add requests for each endpoint listed above
+4. Run the requests in the order shown in the test flow
+5. Use the Collection Runner to automate testing
+
+**Postman Collection Structure:**
+```
+Geofence API/
+├── Health Check (GET)
+├── Get All Zones (GET)
+├── Location - Outside Zones (POST)
+├── Location - Enter Wuse (POST)
+├── Get Vehicle Status (GET)
+├── Location - Move to Gwarimpa (POST)
+├── Get All Events (GET)
+├── Get Events - TX123 Only (GET)
+├── Get All Vehicles (GET)
+└── Get Stats (GET)
+```
 
 ## 🏗 Design Decisions
 
@@ -409,10 +659,6 @@ curl http://localhost:3000/api/stats
 ## 🤝 Contributing
 
 This is a challenge submission, but feedback is welcome!
-
-## 📄 License
-
-MIT
 
 ---
 

@@ -12,6 +12,10 @@ A real-time location-based service that tracks vehicles as they move through geo
 - [Testing](#testing)
 - [Design Decisions](#design-decisions)
 - [Future Improvements](#future-improvements)
+- [Assumptions](#assumptions)
+- [Contributing](#contributing)
+- [License](#license)
+
 
 ## 🎯 Overview
 
@@ -412,4 +416,4 @@ MIT
 
 ---
 
-**Built with ❤️ for a location-based taxi service in Abuja, Nigeria**
+**Built for a location-based taxi service in Abuja, Nigeria**
